@@ -29,6 +29,7 @@ type Heartbeater struct {
 
 type Master struct {
    Heartbeater
+   WorkerAddress
    Members        []string       // ip strings of heartbeaters
 }
 
@@ -37,11 +38,22 @@ type Worker struct {
    MasterAddr     string         // ip string of master
 }
 
+type WorkerAddress struct {
+   Address       string
+}
+
 func (me *Master) AddHeartbeater(w http.ResponseWriter, r *http.Request) {
-   ip, port, err := net.SplitHostPort(r.RemoteAddr)
+
+   decoder := json.NewDecoder(r.Body)
+   err := decoder.Decode(&me.WorkerAddress)
+   fmt.Println(me.WorkerAddress.Address)
    checkError(err)
-   fmt.Println("New heartbeater at", ip, "on port", port)
-   me.Members = append(me.Members, r.RemoteAddr)
+
+
+   // ip, port, err := net.SplitHostPort(r.RemoteAddr)
+   // checkError(err)
+   fmt.Println("New heartbeater at", me.WorkerAddress.Address)
+   me.Members = append(me.Members, me.WorkerAddress.Address)
    fmt.Printf("%v\n", me.Members)
 
    responseData := map[string]time.Duration {
@@ -52,7 +64,7 @@ func (me *Master) AddHeartbeater(w http.ResponseWriter, r *http.Request) {
 
    go me.AssignNeighbors()
    if len(me.Members) >= 3 {
-      
+
    }
 }
 
@@ -73,8 +85,7 @@ func (me *Master) AssignNeighbors() {
       payload, err := json.Marshal(message)
       checkError(err)
 
-      //url := ipToUrl(ip)
-      url := ipToUrl("localhost:3001")
+      url := ipToUrl(ip)
       fmt.Println("sending to " + url)
 
       resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
@@ -98,9 +109,19 @@ func (me *Worker) beatLoop() {
 
 func (me *Worker) connect() {
    url := ipToUrl(me.MasterAddr)
-   resp, err := http.Get(url)
+   // resp, err := http.Get(url)
+   fmt.Println("IpStr",me.Heartbeater.IpStr)
+   message := map[string]string{
+      "Address": me.Heartbeater.IpStr,
+   }
+
+   payload, err := json.Marshal(message)
+   checkError(err)
+   resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
+
    checkError(err)
    defer resp.Body.Close()
+
    json.NewDecoder(resp.Body).Decode(&me.Delays)
    fmt.Println(me.Delays.BeatDelay)
    fmt.Println(me.Delays.TableDelay)
