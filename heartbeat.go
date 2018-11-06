@@ -8,6 +8,7 @@ import (
    "net/http"
    "os"
    "time"
+   "bytes"
 )
 
 type Delays struct {
@@ -15,10 +16,15 @@ type Delays struct {
    TableDelay     time.Duration
 }
 
+type Neighbors struct {
+   First          string
+   Second         string
+}
+
 type Heartbeater struct {
    IpStr          string
-   MyDelays       Delays
-   Neighbors      []string       // ip strings of neighbors I'm responsible for
+   Delays
+   Neighbors                     // ip strings of neighbors I'm responsible for
 }
 
 type Master struct {
@@ -43,6 +49,33 @@ func (me *Master) AddHeartbeater(w http.ResponseWriter, r *http.Request) {
       "TableDelay": 5 * time.Second,
    }
    json.NewEncoder(w).Encode(responseData)
+
+   go me.AssignNeighbors()
+   if len(me.Members) >= 3 {
+      
+   }
+}
+
+func (me *Master) AssignNeighbors() {
+   // me.Heartbeater.Neighbors = Neighbors {
+   //    First: me.Members[1],
+   //    Second: me.Members[2],
+   // }
+   total := len(me.Members)
+   for i, ip := range me.Members[1:] {
+      first := me.Members[(i + 1) % total]
+      second := me.Members[(i + 2) % total]
+      message := map[string]string{
+         "First": first,
+         "Second": second,
+      }
+      payload, err := json.Marshal(message)
+      checkError(err)
+      url := ipToUrl(ip)
+      resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
+      checkError(err)
+      defer resp.Body.Close()
+   }
 }
 
 func (me *Heartbeater) ReceiveBeat(w http.ResponseWriter, r *http.Request) {
@@ -63,9 +96,17 @@ func (me *Worker) connect() {
    resp, err := http.Get(url)
    checkError(err)
    defer resp.Body.Close()
-   json.NewDecoder(resp.Body).Decode(&me.MyDelays)
-   fmt.Println(me.MyDelays.BeatDelay)
-   fmt.Println(me.MyDelays.TableDelay)
+   json.NewDecoder(resp.Body).Decode(&me.Delays)
+   fmt.Println(me.Delays.BeatDelay)
+   fmt.Println(me.Delays.TableDelay)
+}
+
+func (me *Worker) ReceiveNeighbors(w http.ResponseWriter, r *http.Request) {
+   decoder := json.NewDecoder(r.Body)
+   err := decoder.Decode(&me.Heartbeater.Neighbors)
+   checkError(err)
+   fmt.Println(me.Heartbeater.Neighbors.First,
+      me.Heartbeater.Neighbors.Second)
 }
 
 func checkError(err error) {
@@ -85,8 +126,8 @@ func (me *Master) BeMaster() {
 
 func (me *Worker) BeWorker() {
    fmt.Println("New worker at", me.IpStr)
+   http.HandleFunc("/", me.ReceiveNeighbors)
    go me.connect()
-
    me.beHeartbeater()
 }
 
