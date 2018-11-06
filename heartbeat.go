@@ -1,6 +1,7 @@
 package heartbeat
 
 import (
+   "encoding/json"
    "fmt"
    "log"
    "net"
@@ -9,10 +10,14 @@ import (
    "time"
 )
 
+type Delays struct {
+   BeatDelay      time.Duration
+   TableDelay     time.Duration
+}
+
 type Heartbeater struct {
    IpStr          string
-   BeatDelay      time.Time      // delay between heartbeats
-   TableDelay     time.Time      // delay between sending table to neighbors
+   MyDelays       Delays
    Neighbors      []string       // ip strings of neighbors I'm responsible for
 }
 
@@ -32,6 +37,12 @@ func (me *Master) AddHeartbeater(w http.ResponseWriter, r *http.Request) {
    fmt.Println("New heartbeater at", ip, "on port", port)
    me.Members = append(me.Members, r.RemoteAddr)
    fmt.Printf("%v\n", me.Members)
+
+   responseData := map[string]time.Duration {
+      "BeatDelay": 1 * time.Second,
+      "TableDelay": 5 * time.Second,
+   }
+   json.NewEncoder(w).Encode(responseData)
 }
 
 func (me *Heartbeater) ReceiveBeat(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +63,9 @@ func (me *Worker) connect() {
    resp, err := http.Get(url)
    checkError(err)
    defer resp.Body.Close()
+   json.NewDecoder(resp.Body).Decode(&me.MyDelays)
+   fmt.Println(me.MyDelays.BeatDelay)
+   fmt.Println(me.MyDelays.TableDelay)
 }
 
 func checkError(err error) {
