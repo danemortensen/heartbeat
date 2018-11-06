@@ -2,6 +2,7 @@ package heartbeat
 
 import (
    "fmt"
+   "log"
    "net"
    "net/http"
    "os"
@@ -9,6 +10,7 @@ import (
 )
 
 type Heartbeater struct {
+   IpStr          string
    BeatDelay      time.Time      // delay between heartbeats
    TableDelay     time.Time      // delay between sending table to neighbors
    Neighbors      []string       // ip strings of neighbors I'm responsible for
@@ -30,7 +32,7 @@ func (me *Master) AddHeartbeater(w http.ResponseWriter, r *http.Request) {
    fmt.Println("New heartbeater at", ip, "on port", port)
 }
 
-func (me *Worker) BeatLoop() {
+func (me *Worker) beatLoop() {
    for range time.Tick(time.Second) {
       resp, err := http.Get(me.MasterAddr)
       checkError(err)
@@ -43,4 +45,22 @@ func checkError(err error) {
       fmt.Println("Error: ", err)
       os.Exit(1)
    }
+}
+
+func (me *Master) BeMaster() {
+   fmt.Println("New master at", me.IpStr)
+   http.HandleFunc("/", me.AddHeartbeater)
+   me.beHeartbeater()
+}
+
+func (me *Worker) BeWorker() {
+   fmt.Println("New worker at", me.IpStr)
+   go me.beatLoop()
+   me.beHeartbeater()
+}
+
+func (me *Heartbeater) beHeartbeater() {
+   listener, err := net.Listen("tcp", me.IpStr)
+   checkError(err)
+   log.Fatal(http.Serve(listener, nil))
 }
