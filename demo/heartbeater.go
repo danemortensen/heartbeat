@@ -42,6 +42,7 @@ func main() {
          Heartbeater: heartbeat.Heartbeater {
             IpStr: ipStr,
          },
+         Members: []string{},
       }
       me.BeMaster()
    } else {                  // I am a worker node
