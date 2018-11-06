@@ -34,9 +34,13 @@ func (me *Master) AddHeartbeater(w http.ResponseWriter, r *http.Request) {
    fmt.Printf("%v\n", me.Members)
 }
 
+func (me *Heartbeater) ReceiveBeat(w http.ResponseWriter, r *http.Request) {
+
+}
+
 func (me *Worker) beatLoop() {
    for range time.Tick(time.Second) {
-      url := ipToUrl(me.MasterAddr)
+      url := ipToUrl(me.MasterAddr) + "/beat"
       resp, err := http.Get(url)
       checkError(err)
       defer resp.Body.Close()
@@ -67,7 +71,8 @@ func (me *Master) BeMaster() {
 
 func (me *Worker) BeWorker() {
    fmt.Println("New worker at", me.IpStr)
-   go me.beatLoop()
+   go me.connect()
+
    me.beHeartbeater()
 }
 
@@ -78,5 +83,5 @@ func (me *Heartbeater) beHeartbeater() {
 }
 
 func ipToUrl(ip string) (string) {
-   return "http://" + ip + "/"
+   return "http://" + ip
 }
