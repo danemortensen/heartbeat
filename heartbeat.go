@@ -63,6 +63,7 @@ func (me *Master) AssignNeighbors() {
    // }
    total := len(me.Members)
    for i, ip := range me.Members[1:] {
+      fmt.Println("handling neighbor " + ip)
       first := me.Members[(i + 1) % total]
       second := me.Members[(i + 2) % total]
       message := map[string]string{
@@ -71,10 +72,14 @@ func (me *Master) AssignNeighbors() {
       }
       payload, err := json.Marshal(message)
       checkError(err)
-      url := ipToUrl(ip)
+
+      //url := ipToUrl(ip)
+      url := ipToUrl("localhost:3001")
+      fmt.Println("sending to " + url)
+
       resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
       checkError(err)
-      defer resp.Body.Close()
+      resp.Body.Close()
    }
 }
 
