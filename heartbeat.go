@@ -180,8 +180,8 @@ func (me *Worker) connect() {
    checkError(err)
    defer resp.Body.Close()
 
-   json.NewDecoder(resp.Body).Decode(&me.Heartbeater.DeathInfo)
-   fmt.Println("My death time is", me.Heartbeater.DeathInfo.DeathTime)
+   json.NewDecoder(resp.Body).Decode(&me.DeathInfo)
+   fmt.Println("My death time is", me.DeathInfo.DeathTime)
 }
 
 func (me *Worker) ReceiveNeighbors(w http.ResponseWriter, r *http.Request) {
