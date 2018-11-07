@@ -1,1 +1,1 @@
-go run demo/heartbeater.go -addr=localhost:3001 -master=localhost:3000
+go run demo/heartbeater.go -addr=localhost:$1 -master=localhost:3000
