@@ -207,6 +207,7 @@ func (me *Worker) BeWorker() {
 
 func (me *Heartbeater) beHeartbeater() {
    listener, err := net.Listen("tcp", me.IpStr)
+   http.HandleFunc("/beat", me.ReceiveBeat)
    checkError(err)
    go me.SendBeat()
    log.Fatal(http.Serve(listener, nil))
