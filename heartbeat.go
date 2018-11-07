@@ -41,10 +41,16 @@ type Neighbors struct {
    Right         string
 }
 
+type HBStatus struct {
+   Counter        int
+   LastBeat       time.Time
+}
+
 type Heartbeater struct {
    IpStr          string
    Delays
    Neighbors                     // ip strings of neighbors I'm responsible for
+   HBTable        map[string]HBStatus
 }
 
 type Master struct {
@@ -77,6 +83,7 @@ func (me *Master) AddHeartbeater(w http.ResponseWriter, r *http.Request) {
    }
    json.NewEncoder(w).Encode(responseData)
 
+   fmt.Println("Hearbeater added")
    if len(me.Members) >= 3 {
       go me.AssignNeighbors()
    }
@@ -88,8 +95,8 @@ func (me *Master) AssignNeighbors() {
       Left: me.Members[total - 1],
       Right: me.Members[1],
    }
-   
-   for i, ip := range me.Members[1:] {
+
+   for i := 1; i < len(me.Members); i++ {
       left := me.Members[(i - 1) % total]
       right := me.Members[(i + 1) % total]
       message := map[string]string{
@@ -98,7 +105,7 @@ func (me *Master) AssignNeighbors() {
       }
       payload, err := json.Marshal(message)
       checkError(err)
-      url := ipToUrl(ip)
+      url := ipToUrl(me.Members[i])
       resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
       checkError(err)
       resp.Body.Close()
@@ -107,19 +114,39 @@ func (me *Master) AssignNeighbors() {
 }
 
 func (me *Heartbeater) ReceiveBeat(w http.ResponseWriter, r *http.Request) {
-
+   var ipStr WorkerAddress
+   decoder := json.NewDecoder(r.Body)
+   err := decoder.Decode(&ipStr)
+   checkError(err)
+   status := HBStatus {
+      Counter: me.HBTable[ipStr.Address].Counter + 1,
+      LastBeat: time.Now(),
+   }
+   fmt.Printf("%v", status)
 }
 
 func (me *Heartbeater) SendBeat() {
    // change http request to post
+   fmt.Println("Beating...")
    for range time.Tick(time.Second) {
       if me.Neighbors.Left != "" && me.Neighbors.Right != "" {
          // url := ipToUrl(me.MasterAddr) + "/beat"
          // resp, err := http.Get(url)
          // checkError(err)
          // resp.Body.Close()
+
+         url := ipToUrl(me.Neighbors.Left) + "/beat"
+         message := map[string]string {
+            "IpStr": me.IpStr,
+         }
+         payload, err := json.Marshal(message)
+         checkError(err)
+         resp, err := http.Post(url,"application/json",
+                                bytes.NewBuffer(payload))
+         fmt.Println("Sending heartbeat to", url)
+         checkError(err)
+         resp.Body.Close()
       }
-      
    }
 }
 
@@ -146,7 +173,14 @@ func (me *Worker) ReceiveNeighbors(w http.ResponseWriter, r *http.Request) {
    err := decoder.Decode(&me.Heartbeater.Neighbors)
    checkError(err)
    fmt.Println(me.Heartbeater.Neighbors.Left,
-      me.Heartbeater.Neighbors.Right)
+      me.Heartbeater.Neighbors.Right, "\n")
+
+   me.HBTable = map[string]HBStatus {
+      me.Neighbors.Left: HBStatus {
+         Counter: 0,
+         LastBeat: time.Now(),
+      },
+   }
 }
 
 func checkError(err error) {
@@ -174,8 +208,8 @@ func (me *Worker) BeWorker() {
 func (me *Heartbeater) beHeartbeater() {
    listener, err := net.Listen("tcp", me.IpStr)
    checkError(err)
-   log.Fatal(http.Serve(listener, nil))
    go me.SendBeat()
+   log.Fatal(http.Serve(listener, nil))
 }
 
 func ipToUrl(ip string) (string) {
