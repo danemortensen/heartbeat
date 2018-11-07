@@ -2,7 +2,7 @@
 Heartbeat protocol for membership status
 Written in GO.
 
-##AUTHOR: Dane Mortensen, Kartik Mendiratta, Gilbert Han
+## AUTHOR: Dane Mortensen, Kartik Mendiratta, Gilbert Han
 
 # Specification
 Each node will send its heartbeat every 2 seconds, sends the table each second and fails every 8 seconds.
