@@ -64,7 +64,7 @@ type Master struct {
 type Worker struct {
    Heartbeater
    MasterAddr     string         // ip string of master
-   DeathInfo     
+   DeathInfo
 }
 
 type WorkerAddress struct {
@@ -96,6 +96,8 @@ func (me *Master) AssignNeighbors() {
       Right: me.Members[1],
    }
 
+   me.Heartbeater.initTable();
+
    for i := 1; i < len(me.Members); i++ {
       left := me.Members[(i - 1) % total]
       right := me.Members[(i + 1) % total]
@@ -109,7 +111,6 @@ func (me *Master) AssignNeighbors() {
       resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
       checkError(err)
       resp.Body.Close()
-      fmt.Println("Sent neighbors to", me.Members[i])
    }
 }
 
@@ -118,11 +119,6 @@ func (me *Heartbeater) ReceiveBeat(w http.ResponseWriter, r *http.Request) {
    decoder := json.NewDecoder(r.Body)
    err := decoder.Decode(&ipStr)
    checkError(err)
-   status := HBStatus {
-      Counter: me.HBTable[ipStr.Address].Counter + 1,
-      LastBeat: time.Now(),
-   }
-   fmt.Printf("%v", status)
 }
 
 func (me *Heartbeater) SendToNeighbor(neighbor string) (bool) {
@@ -133,21 +129,29 @@ func (me *Heartbeater) SendToNeighbor(neighbor string) (bool) {
    payload, err := json.Marshal(message)
    checkError(err)
    fmt.Println("Sending heartbeat to", url)
-   resp, err := http.Post(url,"application/json", 
+   resp, err := http.Post(url,"application/json",
       bytes.NewBuffer(payload))
    defer resp.Body.Close()
-
    if err != nil {
       last := me.HBTable[neighbor].LastBeat
       failTime := time.Now()
       if failTime.Sub(last).Seconds() > 3 * X {
-         me.HBTable[neighbor].Counter = -1
-         me.HBTable[neighbor].LastBeat = failTime
+         // me.HBTable[neighbor].Counter = -1
+         // me.HBTable[neighbor].LastBeat = failTime
+         me.HBTable[neighbor] = HBStatus {
+            -1,
+            failTime,
+         }
          return false
       }
    } else {
-      me.HBTable[neighbor].Counter++
-      me.HBTable[neighbor].LastBeat = time.Now()
+      // me.HBTable[neighbor].Counter++
+      // me.HBTable[neighbor].LastBeat = time.Now()
+      oldCounter := me.HBTable[neighbor].Counter
+      me.HBTable[neighbor] = HBStatus {
+         oldCounter + 1,
+         time.Now(),
+      }
    }
 
    return true
@@ -184,6 +188,18 @@ func (me *Worker) connect() {
    fmt.Println("My death time is", me.DeathInfo.DeathTime)
 }
 
+func (me *Heartbeater) initTable() {
+   initStatus := HBStatus {
+      Counter: 0,
+      LastBeat: time.Now(),
+   }
+
+   me.HBTable = map[string]HBStatus {
+      me.Neighbors.Left: initStatus,
+      me.Neighbors.Right: initStatus,
+   }
+}
+
 func (me *Worker) ReceiveNeighbors(w http.ResponseWriter, r *http.Request) {
    decoder := json.NewDecoder(r.Body)
    err := decoder.Decode(&me.Heartbeater.Neighbors)
@@ -192,12 +208,7 @@ func (me *Worker) ReceiveNeighbors(w http.ResponseWriter, r *http.Request) {
       me.Heartbeater.Neighbors.Left,
       me.Heartbeater.Neighbors.Right)
 
-   me.HBTable = map[string]HBStatus {
-      me.Neighbors.Left: HBStatus {
-         Counter: 0,
-         LastBeat: time.Now(),
-      },
-   }
+   me.initTable()
 }
 
 func checkError(err error) {
